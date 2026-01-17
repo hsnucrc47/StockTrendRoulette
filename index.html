@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股市走向輪盤</title>
+    <style>
+        :root {
+            --up-color: #ff4d4d;
+            --down-color: #2ecc71;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #2c3e50;
+        }
+
+        body {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            color: #2c3e50;
+        }
+
+        .container { max-width: 900px; width: 100%; text-align: center; }
+
+        /* 數據面板 */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .stat-card h3 { margin: 0; font-size: 14px; color: #7f8c8d; }
+        .stat-card .value { font-size: 28px; font-weight: 800; margin-top: 8px; }
+        #current-price { font-size: 42px; cursor: pointer; }
+        .price-up { color: var(--up-color); }
+        .price-down { color: var(--down-color); }
+
+        /* 手動調整區 */
+        .manual-control {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+        .manual-control input {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .small-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 輪盤區域 */
+        .wheel-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 20px auto;
+        }
+
+        #wheel-canvas {
+            width: 100%;
+            height: 100%;
+            transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1);
+            filter: drop-shadow(0 5px 15px rgba(0,0,0,0.1));
+        }
+
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 35px solid #2c3e50;
+            z-index: 10;
+        }
+
+        .main-btns {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        button.main-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(44, 62, 80, 0.3);
+            transition: all 0.3s;
+        }
+
+        button.reset-btn {
+            background: #e67e22;
+            padding: 16px 20px;
+        }
+
+        button:hover:not(:disabled) { transform: scale(1.05); }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; box-shadow: none; }
+
+        .status-msg { margin-top: 15px; font-size: 18px; font-weight: bold; color: #e67e22; height: 24px; }
+
+        /* 歷史紀錄表 */
+        .history-section {
+            margin-top: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 14px; text-align: center; border-bottom: 1px solid #f1f1f1; }
+        th { background: #f8f9fa; color: #7f8c8d; font-size: 14px; }
+        .tag { padding: 4px 10px; border-radius: 20px; font-size: 12px; color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>股市走向輪盤</h1>
+
+        <div class="dashboard">
+            <div class="stat-card">
+                <h3>盤中時間</h3>
+                <div class="value" id="current-time">09:30</div>
+            </div>
+            <div class="stat-card">
+                <h3>目前股價</h3>
+                <div class="value price-up" id="current-price">500</div>
+                <div class="manual-control">
+                    <input type="number" id="manual-price-input" placeholder="自訂價格">
+                    <button class="small-btn" onclick="setManualPrice()">設定</button>
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>當前輪次</h3>
+                <div class="value" id="current-round">第 0 / 14 輪</div>
+            </div>
+        </div>
+
+        <div class="wheel-container">
+            <div class="pointer"></div>
+            <canvas id="wheel-canvas" width="600" height="600"></canvas>
+        </div>
+
+        <div class="main-btns">
+            <button id="spin-btn" class="main-btn">啟動輪盤</button>
+            <button id="reset-btn" class="main-btn reset-btn" onclick="resetGame()">新開盤</button>
+        </div>
+        
+        <div class="status-msg" id="status-msg"></div>
+
+        <div class="history-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>時間</th>
+                        <th>觸發事件</th>
+                        <th>漲跌幅</th>
+                        <th>結算股價</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 配置與變數 ---
+        const totalRounds = 14;
+        let gameState = {
+            currentPrice: 500,
+            currentRound: 0,
+            history: [],
+            eventPool: [],
+            lastRotation: 0,
+            currentTimeStr: "09:30"
+        };
+
+        const config = [
+            { label: '央行大降息', change: 1.5, color: '#e74c3c', count: 1 },
+            { label: '科技股爆漲', change: 0.8, color: '#ff7675', count: 2 },
+            { label: '外資湧入', change: 0.5, color: '#fab1a0', count: 3 },
+            { label: '小跌', change: -0.2, color: '#55efc4', count: 3 },
+            { label: '中跌', change: -0.4, color: '#00b894', count: 2 },
+            { label: '崩盤', change: -0.9, color: '#009432', count: 1 }
+        ];
+
+        // --- 2. 存檔邏輯 ---
+        function saveToLocal() {
+            localStorage.setItem('stock_game_save', JSON.stringify(gameState));
+        }
+
+        function loadFromLocal() {
+            const saved = localStorage.getItem('stock_game_save');
+            if (saved) {
+                gameState = JSON.parse(saved);
+                renderUI();
+                renderHistory();
+            } else {
+                initEventPool();
+            }
+        }
+
+        function initEventPool() {
+            let pool = [];
+            config.forEach(item => {
+                for(let i=0; i<item.count; i++) pool.push({...item});
+            });
+            for(let i=0; i<2; i++) {
+                const rand = config[Math.floor(Math.random() * config.length)];
+                pool.push({...rand});
+            }
+            // Shuffle
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            gameState.eventPool = pool;
+            saveToLocal();
+        }
+
+        function resetGame() {
+            if(!confirm("確定要清除所有進度重新開始嗎？")) return;
+            localStorage.removeItem('stock_game_save');
+            location.reload();
+        }
+
+        // --- 3. UI 渲染 ---
+        const canvas = document.getElementById('wheel-canvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spin-btn');
+
+        function renderUI() {
+            document.getElementById('current-price').innerText = gameState.currentPrice;
+            document.getElementById('current-time').innerText = gameState.currentTimeStr;
+            document.getElementById('current-round').innerText = `第 ${gameState.currentRound} / ${totalRounds} 輪`;
+            
+            if (gameState.currentRound >= totalRounds) {
+                spinBtn.disabled = true;
+                document.getElementById('status-msg').innerText = "🚨 今日盤勢結束";
+            }
+            // 恢復轉盤角度
+            canvas.style.transform = `rotate(${gameState.lastRotation}deg)`;
+        }
+
+        function renderHistory() {
+            const body = document.getElementById('history-body');
+            body.innerHTML = '';
+            gameState.history.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.time}</td>
+                    <td><span class="tag" style="background:${item.color}">${item.label}</span></td>
+                    <td style="color:${item.change >= 0 ? 'var(--up-color)' : 'var(--down-color)'}">${item.changePercent}</td>
+                    <td><strong>${item.price}</strong></td>
+                `;
+                body.appendChild(row); // 存檔順序是舊到新，UI 顯示也是依照插入順序
+            });
+        }
+
+        // --- 4. 繪製輪盤 (14 格) ---
+        function drawWheel() {
+            const totalSlices = 14;
+            const sliceAngle = (2 * Math.PI) / totalSlices;
+            const centerX = 300; const centerY = 300; const radius = 290;
+
+            gameState.eventPool.forEach((event, i) => {
+                const angle = i * sliceAngle;
+                ctx.beginPath();
+                ctx.fillStyle = event.color;
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + sliceAngle);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + sliceAngle / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 16px Arial";
+                ctx.fillText(event.label, radius - 20, 6);
+                ctx.restore();
+            });
+        }
+
+        // --- 5. 旋轉與手動調整 ---
+        function setManualPrice() {
+            const input = document.getElementById('manual-price-input');
+            const newPrice = parseInt(input.value);
+            if (!isNaN(newPrice)) {
+                gameState.currentPrice = newPrice;
+                document.getElementById('current-price').innerText = newPrice;
+                saveToLocal();
+                alert("價格已更新為: " + newPrice);
+                input.value = '';
+            }
+        }
+
+        spinBtn.addEventListener('click', () => {
+            if (gameState.currentRound >= totalRounds) return;
+
+            spinBtn.disabled = true;
+            const targetIndex = gameState.currentRound;
+            const event = gameState.eventPool[targetIndex];
+            
+            const roundsToSpin = 7;
+            const degreesPerSlice = 360 / 14;
+            // 計算角度：確保目標格子停在正上方 (-90度)
+            const targetRotation = (roundsToSpin * 360) - (targetIndex * degreesPerSlice) - (degreesPerSlice / 2) - 90;
+            
+            // 疊加旋轉
+            const finalRotation = gameState.lastRotation + (360 * roundsToSpin) + (targetRotation - (gameState.lastRotation % 360));
+            
+            canvas.style.transform = `rotate(${finalRotation}deg)`;
+            gameState.lastRotation = finalRotation;
+
+            setTimeout(() => {
+                // 邏輯計算
+                const oldPrice = gameState.currentPrice;
+                gameState.currentPrice = Math.floor(gameState.currentPrice * (1 + event.change));
+                
+                // 時間計算
+                let [h, m] = gameState.currentTimeStr.split(':').map(Number);
+                m += 10;
+                if(m >= 60) { h++; m = 0; }
+                gameState.currentTimeStr = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+                
+                gameState.currentRound++;
+
+                // 紀錄
+                const changePercent = event.change >= 0 ? `+${event.change * 100}%` : `${event.change * 100}%`;
+                gameState.history.unshift({
+                    time: gameState.currentTimeStr,
+                    label: event.label,
+                    color: event.color,
+                    change: event.change,
+                    changePercent: changePercent,
+                    price: gameState.currentPrice
+                });
+
+                renderUI();
+                renderHistory();
+                saveToLocal();
+
+                if (gameState.currentRound < totalRounds) {
+                    spinBtn.disabled = false;
+                }
+            }, 4000);
+        });
+
+        // 初始化
+        loadFromLocal();
+        drawWheel();
+        renderUI();
+    </script>
+</body>
+</html>
