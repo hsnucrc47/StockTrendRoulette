@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://hsnucrc47.github.io/img/favicon.png" type="image/x-icon">
     <title>股市走向輪盤</title>
     <style>
         :root {
@@ -26,7 +27,6 @@
 
         .container { max-width: 900px; width: 100%; text-align: center; }
 
-        /* 數據面板 */
         .dashboard {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -43,7 +43,6 @@
         .price-up { color: var(--up-color); }
         .price-down { color: var(--down-color); }
 
-        /* 圖表 Modal */
         #chart-modal {
             display: none;
             position: fixed;
@@ -67,7 +66,6 @@
             font-size: 24px; cursor: pointer; color: #999;
         }
 
-        /* 輪盤區域 */
         .wheel-container {
             position: relative;
             width: 350px; height: 350px;
@@ -84,7 +82,6 @@
             border-top: 35px solid #2c3e50; z-index: 10;
         }
 
-        /* 按鈕區 */
         .main-btns { display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 10px; }
         .action-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         
@@ -102,7 +99,6 @@
 
         .manual-control input { width: 70px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
 
-        /* 紀錄表 */
         .history-section {
             margin-top: 25px; background: var(--card-bg); border-radius: 12px;
             overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%;
@@ -120,7 +116,7 @@
         <div class="dashboard">
             <div class="stat-card">
                 <h3>盤中時間</h3>
-                <div class="value" id="current-time">09:30</div>
+                <div class="value" id="current-time">09:40</div>
             </div>
             <div class="stat-card">
                 <h3>目前股價</h3>
@@ -132,7 +128,7 @@
             </div>
             <div class="stat-card">
                 <h3>當前輪次</h3>
-                <div class="value" id="current-round">第 0 / 14 輪</div>
+                <div class="value" id="current-round">第 0 / 12 輪</div>
             </div>
         </div>
 
@@ -177,15 +173,17 @@
     </div>
 
     <script>
-        // --- 核心狀態 ---
+
+        const TOTAL_ROUNDS = 12; 
+        
         let gameState = {
             currentPrice: 500,
             currentRound: 0,
-            history: [], // 格式: {time, label, price, change}
+            history: [],
             eventPool: [],
             lastRotation: 0,
-            currentTimeStr: "09:30",
-            pricePath: [500] // 用於繪圖的價格路徑 [初始, R1, R2...]
+            currentTimeStr: "09:40", // 起始時間 09:40
+            pricePath: [500]
         };
 
         let undoStack = [];
@@ -200,7 +198,6 @@
             { label: '崩盤', change: -0.9, color: '#009432', count: 1 }
         ];
 
-        // --- 趨勢圖繪製邏輯 ---
         function openChart() {
             document.getElementById('chart-modal').style.display = 'flex';
             drawTrendChart();
@@ -216,20 +213,17 @@
             const data = gameState.pricePath;
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             const padding = 40;
             const chartWidth = canvas.width - padding * 2;
             const chartHeight = canvas.height - padding * 2;
 
-            // 計算座標範圍
             const maxPrice = Math.max(...data, 600) * 1.1;
             const minPrice = Math.min(...data, 0) * 0.9;
             const priceRange = maxPrice - minPrice;
 
-            function getX(i) { return padding + (i * (chartWidth / 14)); }
+            function getX(i) { return padding + (i * (chartWidth / TOTAL_ROUNDS)); }
             function getY(p) { return canvas.height - padding - ((p - minPrice) / priceRange * chartHeight); }
 
-            // 繪製格線
             ctx.strokeStyle = '#eee';
             ctx.lineWidth = 1;
             for(let i=0; i<=5; i++) {
@@ -237,7 +231,6 @@
                 ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(canvas.width - padding, y); ctx.stroke();
             }
 
-            // 繪製線段
             for (let i = 1; i < data.length; i++) {
                 ctx.beginPath();
                 ctx.lineWidth = 3;
@@ -246,23 +239,20 @@
                 ctx.lineTo(getX(i), getY(data[i]));
                 ctx.stroke();
 
-                // 繪製點
                 ctx.fillStyle = ctx.strokeStyle;
                 ctx.beginPath();
                 ctx.arc(getX(i), getY(data[i]), 4, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // 座標標籤
             ctx.fillStyle = "#999";
             ctx.font = "12px Arial";
             ctx.fillText(Math.floor(maxPrice), 5, padding);
             ctx.fillText(Math.floor(minPrice), 5, canvas.height - padding);
-            ctx.fillText("09:30", padding, canvas.height - 10);
-            ctx.fillText("11:50", canvas.width - padding - 30, canvas.height - 10);
+            ctx.fillText("09:40", padding, canvas.height - 10);
+            ctx.fillText("11:40", canvas.width - padding - 30, canvas.height - 10);
         }
 
-        // --- 核心邏輯 (其餘保持原樣並整合 pricePath) ---
         function saveSnapshot() {
             undoStack.push(JSON.stringify(gameState));
             redoStack = [];
@@ -291,7 +281,7 @@
         function sync() {
             document.getElementById('current-price').innerText = gameState.currentPrice;
             document.getElementById('current-time').innerText = gameState.currentTimeStr;
-            document.getElementById('current-round').innerText = `第 ${gameState.currentRound} / 14 輪`;
+            document.getElementById('current-round').innerText = `第 ${gameState.currentRound} / ${TOTAL_ROUNDS} 輪`;
             document.getElementById('wheel-canvas').style.transform = `rotate(${gameState.lastRotation}deg)`;
             
             const body = document.getElementById('history-body');
@@ -304,8 +294,8 @@
                 body.appendChild(row);
             });
 
-            document.getElementById('spin-btn').disabled = gameState.currentRound >= 14;
-            localStorage.setItem('stock_game_final', JSON.stringify(gameState));
+            document.getElementById('spin-btn').disabled = gameState.currentRound >= TOTAL_ROUNDS;
+            localStorage.setItem('stock_game_final_12', JSON.stringify(gameState));
             updateButtons();
         }
 
@@ -320,19 +310,22 @@
         }
 
         document.getElementById('spin-btn').addEventListener('click', () => {
-            if(gameState.currentRound >= 14) return;
+            if(gameState.currentRound >= TOTAL_ROUNDS) return;
             saveSnapshot();
             document.getElementById('spin-btn').disabled = true;
 
             const idx = gameState.currentRound;
             const ev = gameState.eventPool[idx];
-            const rot = gameState.lastRotation + (360 * 7) + ((14 - idx) * (360/14)) - (gameState.lastRotation % 360) - (360/28) - 90;
+            // 旋轉度數計算 (改為 12 分之一輪)
+            const rot = gameState.lastRotation + (360 * 7) + ((TOTAL_ROUNDS - idx) * (360/TOTAL_ROUNDS)) - (gameState.lastRotation % 360) - (360/(TOTAL_ROUNDS*2)) - 90;
             
             document.getElementById('wheel-canvas').style.transform = `rotate(${rot}deg)`;
             gameState.lastRotation = rot;
 
             setTimeout(() => {
+                // 邏輯計算：無條件捨去
                 gameState.currentPrice = Math.floor(gameState.currentPrice * (1 + ev.change));
+                
                 let [h, m] = gameState.currentTimeStr.split(':').map(Number);
                 m += 10; if(m>=60){h++; m=0;}
                 gameState.currentTimeStr = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
@@ -349,31 +342,39 @@
         });
 
         function resetGame() {
-            if(confirm("重置所有數據？")) { localStorage.removeItem('stock_game_final'); location.reload(); }
+            if(confirm("確定要清除進度並開始新的一盤嗎？")) { 
+                localStorage.removeItem('stock_game_final_12'); 
+                location.reload(); 
+            }
         }
 
-        // 初始化繪圖與數據
         const canvasW = document.getElementById('wheel-canvas');
         const ctxW = canvasW.getContext('2d');
         function drawW() {
-            const slice = (Math.PI*2)/14;
+            const slice = (Math.PI*2)/TOTAL_ROUNDS;
             gameState.eventPool.forEach((e, i) => {
                 ctxW.beginPath(); ctxW.fillStyle = e.color; ctxW.moveTo(300, 300);
                 ctxW.arc(300, 300, 290, i*slice, (i+1)*slice); ctxW.fill();
                 ctxW.strokeStyle = 'white'; ctxW.stroke();
                 ctxW.save(); ctxW.translate(300, 300); ctxW.rotate(i*slice + slice/2);
-                ctxW.fillStyle = "white"; ctxW.font = "bold 16px Arial"; ctxW.fillText(e.label, 120, 8); ctxW.restore();
+                ctxW.fillStyle = "white"; ctxW.font = "bold 18px Arial"; ctxW.fillText(e.label, 120, 8); ctxW.restore();
             });
         }
 
-        // 載入或新建
-        const saved = localStorage.getItem('stock_game_final');
+        const saved = localStorage.getItem('stock_game_final_12');
         if(saved) {
             gameState = JSON.parse(saved);
         } else {
-            let p = []; config.forEach(c => { for(let i=0; i<c.count; i++) p.push({...c}); });
-            for(let i=0; i<2; i++) p.push({...config[Math.floor(Math.random()*6)]});
-            for(let i=p.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [p[i],p[j]]=[p[j],p[i]]; }
+            // 建立精確的 12 個事件池
+            let p = []; 
+            config.forEach(c => { 
+                for(let i=0; i<c.count; i++) p.push({...c}); 
+            });
+            // 洗牌
+            for(let i=p.length-1; i>0; i--){ 
+                const j = Math.floor(Math.random()*(i+1)); 
+                [p[i],p[j]]=[p[j],p[i]]; 
+            }
             gameState.eventPool = p;
         }
         drawW();
